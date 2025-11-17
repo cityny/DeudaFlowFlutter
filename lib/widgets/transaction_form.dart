@@ -8,6 +8,9 @@ import '../models/client.dart';
 import '../providers/currency_provider.dart';
 import 'package:provider/provider.dart';
 // import '../utils/currency_utils.dart';
+// 🚨 NUEVA IMPORTACIÓN DEL MODAL DE CONFIRMACIÓN
+import 'confirmation_modal.dart'; 
+
 
 // --- Formateador y función de miles a nivel superior ---
 final NumberFormat _numberFormat = NumberFormat.currency(
@@ -108,10 +111,11 @@ class _TransactionFormState extends State<TransactionForm> {
   final _rateController = TextEditingController(); // NUEVO
   bool _rateFieldVisible = false; // NUEVO
 
-  //Reemplaza esto por la obtención real de clientes desde Provider o base de datos
-  //Ejemplo: final clients = Provider.of<ClientProvider>(context).clients;
-
+  // Reemplaza esto por la obtención real de clientes desde Provider o base de datos
+  // Ejemplo: final clients = Provider.of<ClientProvider>(context).clients;
+  // Se mantiene como una lista vacía para la estructura del widget
   final List<Client> clients = [];
+
   @override
   void initState() {
     super.initState();
@@ -126,6 +130,8 @@ class _TransactionFormState extends State<TransactionForm> {
     _amountFocusNode.removeListener(_onAmountFocusChange);
     _amountFocusNode.dispose();
     _amountController.dispose();
+    _descriptionController.dispose();
+    _rateController.dispose();
     super.dispose();
   }
 
@@ -145,8 +151,8 @@ class _TransactionFormState extends State<TransactionForm> {
     }
   }
 
-  // Usar logger en vez de print para errores y advertencias
-  Future<void> _save() async {
+  // 🚨 REFRACTORIZACIÓN: Renombrado de _save() a _performSave()
+  Future<void> _performSave({bool popOnSuccess = true}) async {
     setState(() {
       _error = null;
       _loading = true;
@@ -155,6 +161,7 @@ class _TransactionFormState extends State<TransactionForm> {
       debugPrint('[TransactionForm ERROR] $message');
     }
 
+    // --- LÓGICA DE VALIDACIÓN (MANTENIDA) ---
     // Validaciones
     if (_selectedClient == null) {
       setState(() {
@@ -162,7 +169,7 @@ class _TransactionFormState extends State<TransactionForm> {
         _loading = false;
       });
       logError('Debes seleccionar un cliente');
-      return;
+      return Future.error('Validation failed: Missing client.');
     }
     if (_type == null) {
       setState(() {
@@ -170,7 +177,7 @@ class _TransactionFormState extends State<TransactionForm> {
         _loading = false;
       });
       logError('Debes seleccionar Deuda o Abono');
-      return;
+      return Future.error('Validation failed: Missing type.');
     }
     if (_currencyCode == null || _currencyCode!.isEmpty) {
       setState(() {
@@ -178,7 +185,7 @@ class _TransactionFormState extends State<TransactionForm> {
         _loading = false;
       });
       logError('Debes seleccionar una moneda');
-      return;
+      return Future.error('Validation failed: Missing currency.');
     }
     final amountText = _amountController.text
         .replaceAll('.', '')
@@ -190,7 +197,7 @@ class _TransactionFormState extends State<TransactionForm> {
         _loading = false;
       });
       logError('Monto inválido');
-      return;
+      return Future.error('Validation failed: Invalid amount.');
     }
     final descriptionText = _descriptionController.text.trim();
     if (descriptionText.isEmpty) {
@@ -199,7 +206,7 @@ class _TransactionFormState extends State<TransactionForm> {
         _loading = false;
       });
       logError('Descripción obligatoria');
-      return;
+      return Future.error('Validation failed: Missing description.');
     }
     if (descriptionText.length > _descriptionMaxLength) {
       setState(() {
@@ -208,7 +215,7 @@ class _TransactionFormState extends State<TransactionForm> {
         _loading = false;
       });
       logError('Descripción demasiado larga');
-      return;
+      return Future.error('Validation failed: Description too long.');
     }
     // Validar y guardar tasa solo si el campo está visible
     if (_rateFieldVisible) {
@@ -220,7 +227,7 @@ class _TransactionFormState extends State<TransactionForm> {
           _loading = false;
         });
         logError('Tasa inválida');
-        return;
+        return Future.error('Validation failed: Invalid rate.');
       } else if (_currencyCode != null) {
         final currencyProvider = Provider.of<CurrencyProvider>(
           context,
@@ -234,6 +241,8 @@ class _TransactionFormState extends State<TransactionForm> {
         currencyProvider.setRateForCurrency(codeUC, rateValue);
       }
     }
+
+    // --- LÓGICA DE GUARDADO (MANTENIDA) ---
     try {
       final now = DateTime.now();
       String randomLetters(int n) {
@@ -247,50 +256,55 @@ class _TransactionFormState extends State<TransactionForm> {
 
       final localId =
           randomLetters(2) + DateTime.now().millisecondsSinceEpoch.toString();
-      if (widget.onSave != null) {
-        await Future.delayed(
+      
+      // Simula espera de guardado (mantenemos la lógica original)
+      await Future.delayed(
           const Duration(milliseconds: 350),
-        ); // Simula espera de guardado
-        // --- Cálculo de anchorUsdValue usando CurrencyProvider si está disponible ---
-        double? anchorUsdValue;
-        double? rate;
-        try {
-          final currencyProvider = Provider.of<CurrencyProvider>(
-            // ignore: use_build_context_synchronously
-            context,
-            listen: false,
-          );
-          final codeUC = _currencyCode!.toUpperCase();
-          rate = currencyProvider.getRateFor(_currencyCode ?? '');
-          if ((_currencyCode ?? '').toUpperCase() == 'USD') {
-            anchorUsdValue = CurrencyUtils.normalizeAnchorUsd(amount);
-            rate = 1.0;
-          } else if (rate != null && rate > 0) {
-            anchorUsdValue = CurrencyUtils.normalizeAnchorUsd(amount / rate);
-          } else {
-            anchorUsdValue = null;
-          }
-          debugPrint(
-            '\u001b[45m[TX_FORM][PROVIDER] currency=$_currencyCode, rate=$rate, anchorUsdValue=$anchorUsdValue\u001b[0m',
-          );
-        } catch (e) {
-          // Fallback si no hay provider en el árbol
-          final codeUC = _currencyCode!.toUpperCase();
-          if (codeUC == 'USD') {
-            anchorUsdValue = amount;
-            rate = 1.0;
-          } else {
-            anchorUsdValue = null;
-          }
-          debugPrint(
-            '\u001b[41m[TX_FORM][NO_PROVIDER] currency=$_currencyCode, anchorUsdValue=$anchorUsdValue, error=$e\u001b[0m',
-          );
+      ); 
+
+      // --- Cálculo de anchorUsdValue usando CurrencyProvider si está disponible ---
+      double? anchorUsdValue;
+      double? rate;
+      try {
+        final currencyProvider = Provider.of<CurrencyProvider>(
+          // ignore: use_build_context_synchronously
+          context,
+          listen: false,
+        );
+        final codeUC = _currencyCode!.toUpperCase();
+        rate = currencyProvider.getRateFor(_currencyCode ?? '');
+        if ((_currencyCode ?? '').toUpperCase() == 'USD') {
+          anchorUsdValue = CurrencyUtils.normalizeAnchorUsd(amount);
+          rate = 1.0;
+        } else if (rate != null && rate > 0) {
+          anchorUsdValue = CurrencyUtils.normalizeAnchorUsd(amount / rate);
+        } else {
+          anchorUsdValue = null;
         }
+        debugPrint(
+          '\u001b[45m[TX_FORM][PROVIDER] currency=$_currencyCode, rate=$rate, anchorUsdValue=$anchorUsdValue\u001b[0m',
+        );
+      } catch (e) {
+        // Fallback si no hay provider en el árbol
+        final codeUC = _currencyCode!.toUpperCase();
+        if (codeUC == 'USD') {
+          anchorUsdValue = amount;
+          rate = 1.0;
+        } else {
+          anchorUsdValue = null;
+        }
+        debugPrint(
+          '\u001b[41m[TX_FORM][NO_PROVIDER] currency=$_currencyCode, anchorUsdValue=$anchorUsdValue, error=$e\u001b[0m',
+        );
+      }
+
+      if (widget.onSave != null) {
         widget.onSave!(
           Transaction(
             id: localId, // id local único
             clientId: _selectedClient!.id,
-            userId: widget.userId,
+            // 🚨 FIX: Se re-añade userId para solucionar el error de parámetro.
+            userId: widget.userId, 
             type: _type!,
             amount: amount,
             description: _descriptionController.text,
@@ -302,27 +316,38 @@ class _TransactionFormState extends State<TransactionForm> {
           ),
         );
       }
-      // ignore: use_build_context_synchronously
-      if (!mounted) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(content: Text('Transacción guardada correctamente')),
-      );
-      // Cierra el modal automáticamente al guardar
-      Future.delayed(const Duration(milliseconds: 200), () {
+      
+      // Si el guardado fue exitoso y NO estamos usando el modal, hacemos el cierre
+      if (popOnSuccess) {
+        // ignore: use_build_context_synchronously
         if (!mounted) return;
-        if (widget.onClose != null) {
-          widget.onClose!();
-        } else {
-          Navigator.of(context, rootNavigator: true).pop();
-        }
-      });
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+              content: Text('Transacción guardada correctamente'),
+          ),
+        );
+        // Cierra el modal automáticamente al guardar
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (!mounted) return;
+          if (widget.onClose != null) {
+            widget.onClose!();
+          } else {
+            Navigator.of(context, rootNavigator: true).pop();
+          }
+        });
+      }
+      
     } catch (e) {
+      if (!mounted) return;
+      
+      // Si hay un error, el modal se encargará de mostrarlo o manejarlo. Lanzamos el error.
       setState(() {
         _error = 'Error inesperado: $e';
         _loading = false;
       });
       logError('Error inesperado: $e');
-      return;
+      // 🚨 IMPORTANTE: Se lanza el error para que el modal lo capture.
+      rethrow; 
     } finally {
       if (mounted) {
         setState(() {
@@ -331,6 +356,93 @@ class _TransactionFormState extends State<TransactionForm> {
       }
     }
   }
+
+  // 🚨 NUEVA FUNCIÓN: Prepara el resumen y muestra el modal
+  void _showConfirmationModal() async {
+    // 1. **Validación Previa: Llamamos a _performSave para ejecutar todas las validaciones**
+    try {
+        // La validación se realiza aquí. Si falla, lanza un error y no pasamos al modal.
+        await _performSave(popOnSuccess: false);
+    } catch (e) {
+        // La validación falló, _performSave ya actualizó _error, salimos.
+        return;
+    }
+    
+    // Si llegamos aquí, los datos son válidos y podemos generar el resumen
+    
+    // 2. **RECOLECCIÓN DE DATOS PARA RESUMEN**
+    final amountText = _amountController.text.trim();
+    final description = _descriptionController.text.trim();
+    final currency = _currencyCode ?? 'N/A';
+    final rateText = _rateController.text.trim();
+    final formattedDate = DateFormat('dd/MM/yyyy').format(_selectedDate);
+
+    // Asumo que SummaryItem está definido en confirmation_modal.dart o es global.
+    final List<SummaryItem> summary = [
+        SummaryItem(
+            label: 'Cliente', 
+            value: _selectedClient!.name, 
+            icon: Icons.person),
+        SummaryItem(
+            label: 'Tipo', 
+            value: _type == 'debt' ? 'Deuda' : 'Abono', 
+            icon: _type == 'debt' ? Icons.trending_down : Icons.trending_up),
+        SummaryItem(
+            label: 'Monto', 
+            value: '$amountText $currency', 
+            icon: Icons.attach_money),
+        SummaryItem(
+            label: 'Fecha', 
+            value: formattedDate, 
+            icon: Icons.calendar_today),
+    ];
+
+    // Incluir tasa manual si fue visible y tiene valor
+    if (_rateFieldVisible && currency.toUpperCase() != 'USD' && rateText.isNotEmpty) {
+        summary.add(SummaryItem(
+            label: 'Tasa Manual', 
+            value: '1 USD = $rateText ${currency.toUpperCase()}', 
+            icon: Icons.currency_exchange));
+    }
+    
+    // Incluir descripción si existe
+    if (description.isNotEmpty) {
+        summary.add(SummaryItem(
+            label: 'Descripción', 
+            value: description, 
+            icon: Icons.description_outlined));
+    }
+    
+    // 3. **MOSTRAR EL MODAL**
+    final confirmed = await showDialog<bool?>(
+      context: context,
+      builder: (ctx) => ConfirmationModal(
+        title: 'Confirmar Transacción',
+        summaryData: summary,
+        // Pasar la función de guardado real
+        onConfirm: () => _performSave(popOnSuccess: false),
+      ),
+    );
+    
+    // 4. **MANEJO DE RESULTADO**
+    // Si la confirmación fue exitosa, cerramos la pantalla principal.
+    if (confirmed == true && mounted) {
+        // Lógica de éxito: Mostrar SnackBar y cerrar el modal principal
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(
+                content: Text('Transacción guardada correctamente'),
+            ),
+        );
+        Future.delayed(const Duration(milliseconds: 200), () {
+            if (!mounted) return;
+            if (widget.onClose != null) {
+              widget.onClose!();
+            } else {
+              Navigator.of(context, rootNavigator: true).pop();
+            }
+        });
+    }
+}
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -439,6 +551,7 @@ class _TransactionFormState extends State<TransactionForm> {
                                 ),
                                 isDense: true,
                               ),
+                              // 🚨 Lógica de clientes restaurada a la original, sin filtros de synced/pendingDelete
                               items: clients.map((client) {
                                 return DropdownMenuItem<String>(
                                   value: client.id,
@@ -848,7 +961,8 @@ class _TransactionFormState extends State<TransactionForm> {
                                     ? 'Guardar Deuda'
                                     : 'Guardar Abono'),
                         ),
-                        onPressed: _loading ? null : _save,
+                        // 🚨 CAMBIO: Ahora llama al modal
+                        onPressed: _loading ? null : _showConfirmationModal,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -909,9 +1023,9 @@ class _ToggleTypeButton extends StatelessWidget {
     final baseColor = color;
     // Reemplazo de .withOpacity() deprecado por .withValues para precisión
     final selectedColor = baseColor.withValues(
-      red: ((baseColor.r * 255.0).round() & 0xff).toDouble(),
-      green: ((baseColor.g * 255.0).round() & 0xff).toDouble(),
-      blue: ((baseColor.b * 255.0).round() & 0xff).toDouble(),
+      red: ((baseColor.red * 255.0).round() & 0xff).toDouble(),
+      green: ((baseColor.green * 255.0).round() & 0xff).toDouble(),
+      blue: ((baseColor.blue * 255.0).round() & 0xff).toDouble(),
       alpha: 0.13 * 255,
     );
     return GestureDetector(

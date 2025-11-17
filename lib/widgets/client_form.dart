@@ -13,6 +13,8 @@ import '../models/client_hive.dart';
 import '../widgets/scale_on_tap.dart';
 import '../utils/currency_utils.dart';
 import 'package:intl/intl.dart';
+// 🚨 NUEVA IMPORTACIÓN DEL MODAL DE CONFIRMACIÓN
+import 'confirmation_modal.dart'; 
 
 // Formateador de miles en vivo (estilo es-ES), sin forzar decimales mientras se escribe
 final NumberFormat _groupFormatEs = NumberFormat.decimalPattern('es');
@@ -753,36 +755,42 @@ class _ClientFormState extends State<ClientForm> {
 
   String? _error;
 
-  void _save() async {
+  // 🚨 FUNCION RENOMBRADA: Antes '_save', ahora '_performSave'
+  // Se añade popOnSuccess para que el modal decida si debe cerrar el form principal
+  Future<void> _performSave({bool popOnSuccess = true}) async {
     final nameText = _nameController.text.trim();
     final phoneText = _phoneController.text.trim();
+    
+    // --- LÓGICA DE VALIDACIÓN COMPLETA (MANTENIDA) ---
     // Validación de campos obligatorios
     if (nameText.isEmpty) {
       setState(() {
         _error = 'El nombre es obligatorio.';
         _isSaving = false;
       });
-      return;
+      // Devolver un error para que el modal lo maneje y no se cierre.
+      return Future.error('Validation failed: Name is empty.'); 
     }
     if (phoneText.isEmpty) {
       setState(() {
         _error = 'El teléfono es obligatorio.';
         _isSaving = false;
       });
-      return;
+      return Future.error('Validation failed: Phone is empty.');
     }
     double balance = 0.0;
     String? type = _initialType;
     double? anchorUsdValue;
     String? currencyCode;
     String initialDescription = '';
+    
     if (_showInitialBalanceFields) {
       if (_selectedCurrency == null || _selectedCurrency!.isEmpty) {
         setState(() {
           _error = 'Debes seleccionar la moneda.';
           _isSaving = false;
         });
-        return;
+        return Future.error('Validation failed: Currency not selected.');
       }
       currencyCode = _selectedCurrency;
       if (type == null) {
@@ -790,7 +798,7 @@ class _ClientFormState extends State<ClientForm> {
           _error = 'Debes seleccionar Deuda o Abono';
           _isSaving = false;
         });
-        return;
+        return Future.error('Validation failed: Type not selected.');
       }
       final balanceText = _balanceController.text.trim();
       if (balanceText.isEmpty) {
@@ -798,7 +806,7 @@ class _ClientFormState extends State<ClientForm> {
           _error = 'El saldo es obligatorio';
           _isSaving = false;
         });
-        return;
+        return Future.error('Validation failed: Balance is empty.');
       }
       // Normalizar: "1.234,56" -> "1234.56"
       final normalized = balanceText.replaceAll('.', '').replaceAll(',', '.');
@@ -808,7 +816,7 @@ class _ClientFormState extends State<ClientForm> {
           _error = 'Saldo inválido. Usa coma o punto para decimales.';
           _isSaving = false;
         });
-        return;
+        return Future.error('Validation failed: Invalid balance format.');
       }
       balance = parsed;
       initialDescription = _initialDescriptionController.text.trim();
@@ -817,7 +825,7 @@ class _ClientFormState extends State<ClientForm> {
           _error = 'Debes agregar una descripción';
           _isSaving = false;
         });
-        return;
+        return Future.error('Validation failed: Description is empty.');
       }
       // --- Cálculo de anchorUsdValue usando provider.getRateFor ---
       final provider = Provider.of<CurrencyProvider>(context, listen: false);
@@ -831,7 +839,7 @@ class _ClientFormState extends State<ClientForm> {
             _rateError = 'Debes ingresar la tasa para $codeUC.';
             _isSaving = false;
           });
-          return;
+          return Future.error('Validation failed: Rate is missing.');
         }
         final manualRate = double.tryParse(rateText);
         if (manualRate == null || manualRate <= 0) {
@@ -839,7 +847,7 @@ class _ClientFormState extends State<ClientForm> {
             _rateError = 'Tasa inválida. Solo números mayores a 0.';
             _isSaving = false;
           });
-          return;
+          return Future.error('Validation failed: Invalid rate format.');
         }
         // Guardar la tasa en el provider para futuras operaciones
         if (!provider.availableCurrencies.contains(codeUC)) {
@@ -851,19 +859,10 @@ class _ClientFormState extends State<ClientForm> {
       }
       if (rate != null && rate > 0) {
         anchorUsdValue = CurrencyUtils.normalizeAnchorUsd(balance / rate);
-        debugPrint(
-          '\u001b[41m[FORM][CALC] balance=$balance, currency=$_selectedCurrency, rate=$rate, anchorUsdValue=$anchorUsdValue\u001b[0m',
-        );
       } else if (codeUC == 'USD') {
         anchorUsdValue = CurrencyUtils.normalizeAnchorUsd(balance);
-        debugPrint(
-          '\u001b[41m[FORM][CALC] balance=$balance, currency=USD, anchorUsdValue=$anchorUsdValue\u001b[0m',
-        );
       } else {
         anchorUsdValue = null;
-        debugPrint(
-          '\u001b[41m[FORM][CALC][WARN] No rate for currency=$_selectedCurrency, anchorUsdValue=null\u001b[0m',
-        );
       }
     } else {
       // Si no se muestran los campos de saldo inicial, no se requiere moneda
@@ -873,6 +872,8 @@ class _ClientFormState extends State<ClientForm> {
       currencyCode = null;
       initialDescription = '';
     }
+    // --- FIN LÓGICA DE VALIDACIÓN Y CÁLCULOS ---
+
     setState(() {
       _error = null;
       _isSaving = true;
@@ -883,6 +884,8 @@ class _ClientFormState extends State<ClientForm> {
         widget.initialClient?.id ??
         DateTime.now().millisecondsSinceEpoch.toString();
     final name = capitalizeWords(nameText);
+    
+    // --- CONSTRUCCIÓN DEL OBJETO (MANTENIDA) ---
     final client = ClientHive(
       id: newId,
       name: name,
@@ -894,23 +897,21 @@ class _ClientFormState extends State<ClientForm> {
       currencyCode: currencyCode ?? 'VES', // Nunca null, por defecto VES
       anchorUsdValue: anchorUsdValue, // Puede ser null si no hay saldo inicial
     );
-    debugPrint(
-      '\u001b[41m[FORM][SAVE] Cliente id=$newId, balance=$balance, currency=$_selectedCurrency, anchorUsdValue=$anchorUsdValue\u001b[0m',
-    );
 
-    // Cerrar el formulario tras 1 segundo, pero seguir guardando en background
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    });
+    // 🚨 ELIMINAR/COMENTAR el Future.delayed con pop() aquí. El modal lo controla.
+    // Future.delayed(const Duration(seconds: 1), () {
+    //   if (mounted) {
+    //     Navigator.of(context).pop();
+    //   }
+    // });
 
-    // Guardar en background (sin esperar el cierre del formulario)
+    // Guardar en background
     try {
       await widget.onSave(client, initialDescription);
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
+      // ... (MANTENER MANEJO DE ERRORES ORIGINAL) ...
       if (msg.contains('duplicate key value') ||
           msg.contains('already exists')) {
         setState(
@@ -936,14 +937,100 @@ class _ClientFormState extends State<ClientForm> {
       setState(() {
         _isSaving = false;
       });
-      return;
+      // 🚨 IMPORTANTE: Se lanza el error para que el modal lo capture.
+      rethrow; 
     }
     if (mounted) {
       setState(() {
         _isSaving = false;
       });
+      // 🚨 El cierre del formulario principal se hace aquí si el modal lo solicitó
+      if (popOnSuccess) {
+        Navigator.of(context).pop();
+      }
     }
   }
+
+  // 🚨 NUEVA FUNCIÓN: Prepara el resumen y muestra el modal
+  void _showConfirmationModal() async {
+    // 1. **VALIDACIÓN PREVIA** (Mínima para mostrar el resumen)
+    final nameText = _nameController.text.trim();
+    final phoneText = _phoneController.text.trim();
+    
+    if (nameText.isEmpty || phoneText.isEmpty) {
+        setState(() => _error = 'El nombre y teléfono son obligatorios.');
+        return;
+    }
+
+    // 2. **RECOLECCIÓN DE DATOS PARA RESUMEN**
+    final List<SummaryItem> summary = [
+        SummaryItem(
+            label: 'Nombre',
+            value: nameText,
+            icon: Icons.person),
+        SummaryItem(
+            label: 'Teléfono',
+            value: phoneText,
+            icon: Icons.phone),
+        SummaryItem(
+            label: 'Dirección',
+            value: _addressController.text.trim().isNotEmpty 
+                ? _addressController.text.trim() 
+                : 'N/A',
+            icon: Icons.home_outlined),
+    ];
+    
+    // Agregar detalles de saldo inicial si están visibles
+    if (_showInitialBalanceFields) {
+        final amountText = _balanceController.text.trim();
+        final currency = _selectedCurrency ?? 'N/A';
+        final rateText = _rateController.text.trim();
+        final description = _initialDescriptionController.text.trim();
+
+        summary.add(SummaryItem(
+            label: 'Tipo de Saldo',
+            value: _initialType == 'debt' ? 'Deuda/Préstamo' : (_initialType == 'payment' ? 'Abono/Pago' : 'No Seleccionado'),
+            icon: _initialType == 'debt' ? Icons.trending_down : Icons.trending_up
+        ));
+        summary.add(SummaryItem(
+            label: 'Monto',
+            value: '$amountText $currency',
+            icon: Icons.attach_money_outlined
+        ));
+        if (rateText.isNotEmpty && currency.toUpperCase() != 'USD') {
+            summary.add(SummaryItem(
+                label: 'Tasa (${currency.toUpperCase()}/USD)',
+                value: rateText,
+                icon: Icons.currency_exchange
+            ));
+        }
+        summary.add(SummaryItem(
+            label: 'Descripción',
+            value: description.isNotEmpty ? description : 'Sin Descripción',
+            icon: Icons.description_outlined
+        ));
+    }
+
+    // 3. **MOSTRAR EL MODAL**
+    final confirmed = await showDialog<bool?>(
+      context: context,
+      builder: (ctx) => ConfirmationModal(
+        title: widget.initialClient == null
+            ? 'Confirmar Registro de Cliente'
+            : 'Confirmar Actualización de Cliente',
+        summaryData: summary,
+        // Pasar la función de guardado real
+        onConfirm: () => _performSave(popOnSuccess: false),
+      ),
+    );
+    
+    // 4. **MANEJO DE RESULTADO**
+    // Si la confirmación fue exitosa (el modal devolvió 'true'), cerramos la pantalla principal.
+    if (confirmed == true && mounted) {
+        Navigator.of(context).pop();
+    }
+}
+
 
   String capitalizeWords(String name) {
     // Usa Characters para no romper pares sustitutos (emoji, acentos compuestos)
@@ -1585,7 +1672,8 @@ class _ClientFormState extends State<ClientForm> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: _isSaving ? null : _save,
+                      // 🚨 CAMBIO AQUÍ: Ahora llama a _showConfirmationModal
+                      onPressed: _isSaving ? null : _showConfirmationModal, 
                       icon: _isSaving
                           ? SizedBox(
                               width: 22,
