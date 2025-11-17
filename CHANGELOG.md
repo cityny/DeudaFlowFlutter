@@ -2,6 +2,14 @@
 
 Todas las novedades, mejoras y correcciones planeadas y lanzadas para Deuda Flow.
 
+## [1.0.8+8] - 2025-09-18
+
+### Novedades (versión 1.0.8+8)
+- Ahora los balances de los clientes se actualizan correctamente en la nube después de sincronizar los movimientos, incluso si los registraste sin conexión.
+- El diálogo de "Conflicto de balances" ya no se sale de pantalla en móviles y tiene un único botón "Forzar sincronización" que muestra el progreso.
+- Menos mensajes técnicos en la consola relacionados con los anuncios: la app muestra menos ruido en los logs.
+- Pequeñas mejoras en la actualización de datos y estabilidad después de sincronizar.
+
 ## [1.0.7] - 2025-09-13
 
 ### Cambios destacados (para todos)
