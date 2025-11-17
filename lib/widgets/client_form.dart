@@ -461,8 +461,7 @@ class _ClientFormState extends State<ClientForm> {
                                                                         0.55,
                                                                       ),
                                                           ),
-                                                        ),
-                                                      );
+                                                        ));
                                                     }).toList(),
                                                   );
                                                 },
@@ -1004,6 +1003,7 @@ class _ClientFormState extends State<ClientForm> {
                     ],
                   ),
                   const SizedBox(height: 14),
+                  // CAMPO NOMBRE (Fondo ajustado)
                   TextField(
                     controller: _nameController,
                     maxLength: 27,
@@ -1013,16 +1013,6 @@ class _ClientFormState extends State<ClientForm> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      filled: true,
-                      fillColor: const Color(
-                        0xFF7C3AED,
-                      ).withValues(alpha: 0.10 * 255),
-                      hoverColor: const Color(
-                        0xFF7C3AED,
-                      ).withValues(alpha: 0.13 * 255),
-                      focusColor: const Color(
-                        0xFF7C3AED,
-                      ).withValues(alpha: 0.16 * 255),
                       floatingLabelBehavior: FloatingLabelBehavior.auto,
                       contentPadding: const EdgeInsets.symmetric(
                         vertical: 16,
@@ -1032,6 +1022,7 @@ class _ClientFormState extends State<ClientForm> {
                     ),
                   ),
                   const SizedBox(height: 14),
+                  // CAMPO DIRECCIÓN (Fondo ajustado)
                   TextField(
                     controller: _addressController,
                     decoration: InputDecoration(
@@ -1040,16 +1031,6 @@ class _ClientFormState extends State<ClientForm> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      filled: true,
-                      fillColor: const Color(
-                        0xFF7C3AED,
-                      ).withValues(alpha: 0.10 * 255),
-                      hoverColor: const Color(
-                        0xFF7C3AED,
-                      ).withValues(alpha: 0.13 * 255),
-                      focusColor: const Color(
-                        0xFF7C3AED,
-                      ).withValues(alpha: 0.16 * 255),
                       floatingLabelBehavior: FloatingLabelBehavior.auto,
                       contentPadding: const EdgeInsets.symmetric(
                         vertical: 16,
@@ -1059,6 +1040,7 @@ class _ClientFormState extends State<ClientForm> {
                     keyboardType: TextInputType.text,
                   ),
                   const SizedBox(height: 14),
+                  // CAMPO TELÉFONO (Fondo ajustado)
                   TextField(
                     controller: _phoneController,
                     decoration: InputDecoration(
@@ -1202,16 +1184,6 @@ class _ClientFormState extends State<ClientForm> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      filled: true,
-                      fillColor: const Color(
-                        0xFF7C3AED,
-                      ).withValues(alpha: 0.10 * 255),
-                      hoverColor: const Color(
-                        0xFF7C3AED,
-                      ).withValues(alpha: 0.13 * 255),
-                      focusColor: const Color(
-                        0xFF7C3AED,
-                      ).withValues(alpha: 0.16 * 255),
                       floatingLabelBehavior: FloatingLabelBehavior.auto,
                       contentPadding: const EdgeInsets.symmetric(
                         vertical: 16,
@@ -1229,7 +1201,7 @@ class _ClientFormState extends State<ClientForm> {
                   if (!(widget.initialClient != null && widget.readOnlyBalance))
                     if (!_showInitialBalanceFields &&
                         widget.initialClient == null)
-                      // Botón para mostrar los campos de saldo inicial
+                      // Botón para mostrar los campos de saldo inicial (Fondo ajustado)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10.0),
                         child: Center(
@@ -1243,9 +1215,8 @@ class _ClientFormState extends State<ClientForm> {
                                 vertical: 12,
                               ),
                               decoration: BoxDecoration(
-                                color: colorScheme.primary.withValues(
-                                  alpha: 0.08 * 255,
-                                ),
+                                color: Colors
+                                    .transparent, // FIX: Fondo transparente para coincidir con los campos
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(
                                   color: colorScheme.primary,
@@ -1311,6 +1282,7 @@ class _ClientFormState extends State<ClientForm> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // CAMPO MONTO (Fondo ajustado)
                           TextField(
                             controller: _balanceController,
                             decoration: InputDecoration(
@@ -1321,16 +1293,6 @@ class _ClientFormState extends State<ClientForm> {
                               prefixIcon: const Icon(
                                 Icons.attach_money_outlined,
                               ),
-                              filled: true,
-                              fillColor: const Color(
-                                0xFF7C3AED,
-                              ).withValues(alpha: 0.10 * 255),
-                              hoverColor: const Color(
-                                0xFF7C3AED,
-                              ).withValues(alpha: 0.13 * 255),
-                              focusColor: const Color(
-                                0xFF7C3AED,
-                              ).withValues(alpha: 0.16 * 255),
                               floatingLabelBehavior: FloatingLabelBehavior.auto,
                               contentPadding: const EdgeInsets.symmetric(
                                 vertical: 16,
@@ -1406,9 +1368,10 @@ class _ClientFormState extends State<ClientForm> {
                                             border: OutlineInputBorder(),
                                             isDense: true,
                                           ),
+                                          // Se ajusta la capitalización y el límite de caracteres al estándar de transaction_form
                                           textCapitalization:
-                                              TextCapitalization.characters,
-                                          maxLength: 4,
+                                              TextCapitalization.sentences,
+                                          maxLength: 11,
                                         ),
                                         actions: [
                                           TextButton(
@@ -1416,20 +1379,35 @@ class _ClientFormState extends State<ClientForm> {
                                                 Navigator.of(ctx).pop(),
                                             child: const Text('Cancelar'),
                                           ),
-                                          ElevatedButton(
+                                          // Cambio de ElevatedButton a TextButton para el efecto sutil
+                                          TextButton(
                                             onPressed: () {
-                                              final code = controller.text
-                                                  .trim()
-                                                  .toUpperCase();
-                                              if (code.isEmpty ||
-                                                  code == 'USD' ||
-                                                  availableCurrencies.contains(
-                                                    code,
-                                                  )) {
+                                              String code =
+                                                  controller.text.trim();
+                                              if (code.isEmpty) {
                                                 Navigator.of(ctx).pop();
                                                 return;
                                               }
-                                              Navigator.of(ctx).pop(code);
+                                              // Normaliza: solo primera letra mayúscula, resto minúscula
+                                              code = code
+                                                      .substring(0, 1)
+                                                      .toUpperCase() +
+                                                  (code.length > 1
+                                                      ? code
+                                                          .substring(1)
+                                                          .toLowerCase()
+                                                      : '');
+
+                                              // La verificación *dentro* del dialog usa la lista original y es case-sensitive.
+                                              if (code == 'USD' ||
+                                                  currencyProvider
+                                                      .availableCurrencies
+                                                      .contains(code)) {
+                                                Navigator.of(ctx).pop();
+                                                return; // Ya existe (case-sensitive) o es USD, no agregar
+                                              }
+                                              Navigator.of(ctx)
+                                                  .pop(code); // Devolver el código validado
                                             },
                                             child: const Text('Agregar'),
                                           ),
@@ -1437,12 +1415,55 @@ class _ClientFormState extends State<ClientForm> {
                                       );
                                     },
                                   );
-                                  if (newCode != null &&
-                                      newCode.isNotEmpty &&
-                                      newCode != 'USD' &&
-                                      !availableCurrencies.contains(newCode)) {
+
+                                  // La lógica para procesar 'newCode' fuera del dialog
+                                  if (newCode != null && newCode.isNotEmpty) {
+                                    // Normaliza el código devuelto (aunque ya está normalizado, lo re-aseguramos)
+                                    final normalizedCode =
+                                        newCode.substring(0, 1).toUpperCase() +
+                                            (newCode.length > 1
+                                                ? newCode
+                                                    .substring(1)
+                                                    .toLowerCase()
+                                                : '');
+
+                                    // Verificación de existencia *case-insensitive*
+                                    final exists = currencyProvider
+                                        .availableCurrencies
+                                        .any(
+                                          (c) =>
+                                              c.toLowerCase() ==
+                                              normalizedCode.toLowerCase(),
+                                        );
+
+                                    if (normalizedCode == 'USD' || exists) {
+                                      return; // Si ya existe (case-insensitive) o es USD, no hacer nada
+                                    }
+
+                                    try {
+                                      // Agregar al provider
+                                      currencyProvider.addManualCurrency(
+                                        normalizedCode,
+                                      );
+                                    } catch (e) {
+                                      debugPrint(
+                                        '[CLIENT_FORM] Error al Agregar Moneda manual: $e',
+                                      );
+                                    }
+
+                                    // Buscar la versión realmente insertada (el provider podría haber cambiado el casing)
+                                    String selectedValue = normalizedCode;
+                                    for (final c
+                                        in currencyProvider.availableCurrencies) {
+                                      if (c.toLowerCase() ==
+                                          normalizedCode.toLowerCase()) {
+                                        selectedValue = c;
+                                        break;
+                                      }
+                                    }
+
                                     setState(() {
-                                      _selectedCurrency = newCode;
+                                      _selectedCurrency = selectedValue;
                                       _rateController.clear();
                                       _rateError = null;
                                     });
@@ -1463,24 +1484,20 @@ class _ClientFormState extends State<ClientForm> {
                             left: 2.0,
                             right: 2.0,
                           ),
+                          // CAMPO TASA (Fondo ajustado)
                           child: TextField(
                             controller: _rateController,
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
                             decoration: InputDecoration(
-                              labelText: 'Tasa',
-                              hintText:
+                              labelText:
                                   'Tasa ${_selectedCurrency?.toUpperCase() ?? ''} a USD',
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               prefixIcon: const Icon(Icons.currency_exchange),
                               errorText: _rateError,
-                              filled: true,
-                              fillColor: const Color(
-                                0xFF7C3AED,
-                              ).withOpacity(0.07),
                               floatingLabelBehavior: FloatingLabelBehavior.auto,
                               contentPadding: const EdgeInsets.symmetric(
                                 vertical: 16,
@@ -1498,6 +1515,7 @@ class _ClientFormState extends State<ClientForm> {
                         padding: const EdgeInsets.only(top: 8.0, bottom: 5.0),
                         child: Stack(
                           children: [
+                            // CAMPO DESCRIPCIÓN (Fondo ajustado)
                             TextField(
                               controller: _initialDescriptionController,
                               maxLines: 2,
@@ -1511,10 +1529,6 @@ class _ClientFormState extends State<ClientForm> {
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                filled: true,
-                                fillColor: const Color(
-                                  0xFF7C3AED,
-                                ).withOpacity(0.07),
                                 floatingLabelBehavior:
                                     FloatingLabelBehavior.auto,
                                 contentPadding: const EdgeInsets.symmetric(
@@ -1638,34 +1652,45 @@ class _ToggleTypeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseColor = color;
-    final selectedColor = baseColor.withValues(alpha: 0.13 * 255);
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? selectedColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? baseColor : Colors.transparent,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: baseColor, size: 18),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: baseColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+    // Fondo sutil para el estado seleccionado (más claro que 0.13)
+    final selectedBackgroundColor = baseColor.withOpacity(0.08);
+
+    // Reemplazo de GestureDetector por Material + InkWell para el efecto Material (ripple)
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell( // Habilita el efecto de onda (ripple)
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        splashColor: baseColor.withOpacity(0.2), // Color de splash
+        highlightColor: baseColor.withOpacity(0.1), // Color de resaltado al presionar
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            // El fondo es ahora un tono muy sutil
+            color: selected ? selectedBackgroundColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? baseColor : Colors.transparent,
+              width: selected ? 1.5 : 1,
             ),
-          ],
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: baseColor, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: baseColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
