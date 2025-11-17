@@ -469,10 +469,10 @@ class AdService {
   }
 
   /// Call this from navigation events to maybe show an interstitial.
-  /// Default: 20% chance, minInterval 2 minutes between interstitials.
+  /// Default: 30% chance, minInterval 2 minutes between interstitials.
   Future<bool> maybeShowInterstitialOnNavigation({
-    double probability = 0.4,
-    Duration minInterval = const Duration(minutes: 5),
+    double probability = 0.3,
+    Duration minInterval = const Duration(minutes: 6),
   }) async {
     // Basic guards
     if (_isShowingAd) return false;
