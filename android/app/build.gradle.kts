@@ -1,6 +1,8 @@
 import java.util.Properties
 import java.io.FileInputStream
 
+System.setProperty("flutter.minSdkVersion.ignore", "true")
+
 plugins {
     id("com.android.application")
     id("kotlin-android")

@@ -9,8 +9,7 @@ import '../providers/currency_provider.dart';
 import 'package:provider/provider.dart';
 // import '../utils/currency_utils.dart';
 // 🚨 NUEVA IMPORTACIÓN DEL MODAL DE CONFIRMACIÓN
-import 'confirmation_modal.dart'; 
-
+import 'confirmation_modal.dart';
 
 // --- Formateador y función de miles a nivel superior ---
 final NumberFormat _numberFormat = NumberFormat.currency(
@@ -112,8 +111,6 @@ class _TransactionFormState extends State<TransactionForm> {
   bool _rateFieldVisible = false; // NUEVO
 
   // Reemplaza esto por la obtención real de clientes desde Provider o base de datos
-  // Ejemplo: final clients = Provider.of<ClientProvider>(context).clients;
-  // Se mantiene como una lista vacía para la estructura del widget
   final List<Client> clients = [];
 
   @override
@@ -151,8 +148,11 @@ class _TransactionFormState extends State<TransactionForm> {
     }
   }
 
-  // 🚨 REFRACTORIZACIÓN: Renombrado de _save() a _performSave()
-  Future<void> _performSave({bool popOnSuccess = true}) async {
+  // 🚨 CORRECCIÓN: Agregado parámetro `onlyValidate` para separar validación del guardado
+  Future<void> _performSave({
+    bool popOnSuccess = true,
+    bool onlyValidate = false,
+  }) async {
     setState(() {
       _error = null;
       _loading = true;
@@ -229,12 +229,14 @@ class _TransactionFormState extends State<TransactionForm> {
         logError('Tasa inválida');
         return Future.error('Validation failed: Invalid rate.');
       } else if (_currencyCode != null) {
+        // Nota: Si estamos en modo validación, no deberíamos modificar el provider todavía
+        // pero para mantener consistencia visual, lo dejamos, o se podría mover al bloque de save.
+        // Por ahora lo mantenemos aquí para asegurar que el valor sea válido.
         final currencyProvider = Provider.of<CurrencyProvider>(
           context,
           listen: false,
         );
         final codeUC = _currencyCode!.toUpperCase();
-        // Agregar la moneda manualmente si no existe
         if (!currencyProvider.availableCurrencies.contains(codeUC)) {
           currencyProvider.addManualCurrency(codeUC);
         }
@@ -256,11 +258,11 @@ class _TransactionFormState extends State<TransactionForm> {
 
       final localId =
           randomLetters(2) + DateTime.now().millisecondsSinceEpoch.toString();
-      
-      // Simula espera de guardado (mantenemos la lógica original)
-      await Future.delayed(
-          const Duration(milliseconds: 350),
-      ); 
+
+      // Si es guardado real, simula espera. Si es validación, es rápido.
+      if (!onlyValidate) {
+        await Future.delayed(const Duration(milliseconds: 350));
+      }
 
       // --- Cálculo de anchorUsdValue usando CurrencyProvider si está disponible ---
       double? anchorUsdValue;
@@ -271,7 +273,6 @@ class _TransactionFormState extends State<TransactionForm> {
           context,
           listen: false,
         );
-        final codeUC = _currencyCode!.toUpperCase();
         rate = currencyProvider.getRateFor(_currencyCode ?? '');
         if ((_currencyCode ?? '').toUpperCase() == 'USD') {
           anchorUsdValue = CurrencyUtils.normalizeAnchorUsd(amount);
@@ -281,9 +282,6 @@ class _TransactionFormState extends State<TransactionForm> {
         } else {
           anchorUsdValue = null;
         }
-        debugPrint(
-          '\u001b[45m[TX_FORM][PROVIDER] currency=$_currencyCode, rate=$rate, anchorUsdValue=$anchorUsdValue\u001b[0m',
-        );
       } catch (e) {
         // Fallback si no hay provider en el árbol
         final codeUC = _currencyCode!.toUpperCase();
@@ -293,9 +291,12 @@ class _TransactionFormState extends State<TransactionForm> {
         } else {
           anchorUsdValue = null;
         }
-        debugPrint(
-          '\u001b[41m[TX_FORM][NO_PROVIDER] currency=$_currencyCode, anchorUsdValue=$anchorUsdValue, error=$e\u001b[0m',
-        );
+      }
+
+      // 🚨 CORRECCIÓN CLAVE: Si solo estamos validando, nos detenemos aquí antes de guardar
+      if (onlyValidate) {
+        // Retornamos éxito sin ejecutar el callback onSave
+        return;
       }
 
       if (widget.onSave != null) {
@@ -303,8 +304,7 @@ class _TransactionFormState extends State<TransactionForm> {
           Transaction(
             id: localId, // id local único
             clientId: _selectedClient!.id,
-            // 🚨 FIX: Se re-añade userId para solucionar el error de parámetro.
-            userId: widget.userId, 
+            userId: widget.userId,
             type: _type!,
             amount: amount,
             description: _descriptionController.text,
@@ -316,15 +316,13 @@ class _TransactionFormState extends State<TransactionForm> {
           ),
         );
       }
-      
+
       // Si el guardado fue exitoso y NO estamos usando el modal, hacemos el cierre
       if (popOnSuccess) {
         // ignore: use_build_context_synchronously
         if (!mounted) return;
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          const SnackBar(
-              content: Text('Transacción guardada correctamente'),
-          ),
+          const SnackBar(content: Text('Transacción guardada correctamente')),
         );
         // Cierra el modal automáticamente al guardar
         Future.delayed(const Duration(milliseconds: 200), () {
@@ -336,18 +334,15 @@ class _TransactionFormState extends State<TransactionForm> {
           }
         });
       }
-      
     } catch (e) {
       if (!mounted) return;
-      
-      // Si hay un error, el modal se encargará de mostrarlo o manejarlo. Lanzamos el error.
+
       setState(() {
         _error = 'Error inesperado: $e';
         _loading = false;
       });
       logError('Error inesperado: $e');
-      // 🚨 IMPORTANTE: Se lanza el error para que el modal lo capture.
-      rethrow; 
+      rethrow;
     } finally {
       if (mounted) {
         setState(() {
@@ -357,19 +352,19 @@ class _TransactionFormState extends State<TransactionForm> {
     }
   }
 
-  // 🚨 NUEVA FUNCIÓN: Prepara el resumen y muestra el modal
+  // 🚨 FUNCIÓN ACTUALIZADA: Prepara el resumen y muestra el modal
   void _showConfirmationModal() async {
-    // 1. **Validación Previa: Llamamos a _performSave para ejecutar todas las validaciones**
+    // 1. **Validación Previa: Llamamos a _performSave con onlyValidate: true**
     try {
-        // La validación se realiza aquí. Si falla, lanza un error y no pasamos al modal.
-        await _performSave(popOnSuccess: false);
+      // 🚨 CORRECCIÓN: Activamos onlyValidate: true para que NO guarde todavía
+      await _performSave(popOnSuccess: false, onlyValidate: true);
     } catch (e) {
-        // La validación falló, _performSave ya actualizó _error, salimos.
-        return;
+      // La validación falló, _performSave ya actualizó _error, salimos.
+      return;
     }
-    
+
     // Si llegamos aquí, los datos son válidos y podemos generar el resumen
-    
+
     // 2. **RECOLECCIÓN DE DATOS PARA RESUMEN**
     final amountText = _amountController.text.trim();
     final description = _descriptionController.text.trim();
@@ -379,70 +374,81 @@ class _TransactionFormState extends State<TransactionForm> {
 
     // Asumo que SummaryItem está definido en confirmation_modal.dart o es global.
     final List<SummaryItem> summary = [
-        SummaryItem(
-            label: 'Cliente', 
-            value: _selectedClient!.name, 
-            icon: Icons.person),
-        SummaryItem(
-            label: 'Tipo', 
-            value: _type == 'debt' ? 'Deuda' : 'Abono', 
-            icon: _type == 'debt' ? Icons.trending_down : Icons.trending_up),
-        SummaryItem(
-            label: 'Monto', 
-            value: '$amountText $currency', 
-            icon: Icons.attach_money),
-        SummaryItem(
-            label: 'Fecha', 
-            value: formattedDate, 
-            icon: Icons.calendar_today),
+      SummaryItem(
+        label: 'Cliente',
+        value: _selectedClient!.name,
+        icon: Icons.person,
+      ),
+      SummaryItem(
+        label: 'Tipo',
+        value: _type == 'debt' ? 'Deuda' : 'Abono',
+        icon: _type == 'debt' ? Icons.trending_down : Icons.trending_up,
+      ),
+      SummaryItem(
+        label: 'Monto',
+        value: '$amountText $currency',
+        icon: Icons.attach_money,
+      ),
+      SummaryItem(
+        label: 'Fecha',
+        value: formattedDate,
+        icon: Icons.calendar_today,
+      ),
     ];
 
     // Incluir tasa manual si fue visible y tiene valor
-    if (_rateFieldVisible && currency.toUpperCase() != 'USD' && rateText.isNotEmpty) {
-        summary.add(SummaryItem(
-            label: 'Tasa Manual', 
-            value: '1 USD = $rateText ${currency.toUpperCase()}', 
-            icon: Icons.currency_exchange));
+    if (_rateFieldVisible &&
+        currency.toUpperCase() != 'USD' &&
+        rateText.isNotEmpty) {
+      summary.add(
+        SummaryItem(
+          label: 'Tasa Manual',
+          value: '1 USD = $rateText ${currency.toUpperCase()}',
+          icon: Icons.currency_exchange,
+        ),
+      );
     }
-    
+
     // Incluir descripción si existe
     if (description.isNotEmpty) {
-        summary.add(SummaryItem(
-            label: 'Descripción', 
-            value: description, 
-            icon: Icons.description_outlined));
+      summary.add(
+        SummaryItem(
+          label: 'Descripción',
+          value: description,
+          icon: Icons.description_outlined,
+        ),
+      );
     }
-    
+
     // 3. **MOSTRAR EL MODAL**
+    // ignore: use_build_context_synchronously
     final confirmed = await showDialog<bool?>(
       context: context,
       builder: (ctx) => ConfirmationModal(
         title: 'Confirmar Transacción',
         summaryData: summary,
-        // Pasar la función de guardado real
-        onConfirm: () => _performSave(popOnSuccess: false),
+        // Pasar la función de guardado real (ahora sí guardamos)
+        onConfirm: () => _performSave(popOnSuccess: false, onlyValidate: false),
       ),
     );
-    
+
     // 4. **MANEJO DE RESULTADO**
     // Si la confirmación fue exitosa, cerramos la pantalla principal.
     if (confirmed == true && mounted) {
-        // Lógica de éxito: Mostrar SnackBar y cerrar el modal principal
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-            const SnackBar(
-                content: Text('Transacción guardada correctamente'),
-            ),
-        );
-        Future.delayed(const Duration(milliseconds: 200), () {
-            if (!mounted) return;
-            if (widget.onClose != null) {
-              widget.onClose!();
-            } else {
-              Navigator.of(context, rootNavigator: true).pop();
-            }
-        });
+      // Lógica de éxito: Mostrar SnackBar y cerrar el modal principal
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Transacción guardada correctamente')),
+      );
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (!mounted) return;
+        if (widget.onClose != null) {
+          widget.onClose!();
+        } else {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+      });
     }
-}
+  }
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -460,7 +466,6 @@ class _TransactionFormState extends State<TransactionForm> {
     final symbol = "";
     final currencyProvider = Provider.of<CurrencyProvider>(context);
     final availableCurrencies = currencyProvider.availableCurrencies;
-    final codeUC = _currencyCode?.toUpperCase();
     final rate = _currencyCode != null
         ? currencyProvider.getRateFor(_currencyCode!)
         : null;
@@ -491,7 +496,7 @@ class _TransactionFormState extends State<TransactionForm> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Título sin botón X
+                    // Título
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: Text(
@@ -503,7 +508,7 @@ class _TransactionFormState extends State<TransactionForm> {
                         ),
                       ),
                     ),
-                    // Si hay cliente seleccionado, solo mostrar el nombre, si no mostrar el selector
+                    // Selector o Display de Cliente
                     (_selectedClient != null)
                         ? Container(
                             margin: const EdgeInsets.only(bottom: 12),
@@ -551,21 +556,17 @@ class _TransactionFormState extends State<TransactionForm> {
                                 ),
                                 isDense: true,
                               ),
-                              // 🚨 Lógica de clientes restaurada a la original, sin filtros de synced/pendingDelete
                               items: clients.map((client) {
                                 return DropdownMenuItem<String>(
                                   value: client.id,
                                   child: Container(
-                                    height:
-                                        48, // Ajusta la altura aquí según el tamaño de fuente
+                                    height: 48,
                                     alignment: Alignment.centerLeft,
                                     width: double.infinity,
                                     child: Text(
                                       client.name,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                      ), // Cambia el tamaño aquí
+                                      style: TextStyle(fontSize: 20),
                                     ),
                                   ),
                                 );
@@ -578,18 +579,15 @@ class _TransactionFormState extends State<TransactionForm> {
                                 });
                               },
                               isExpanded: true,
-                              menuMaxHeight:
-                                  250, // Hace el dropdown scrollable si hay muchos clientes
+                              menuMaxHeight: 250,
                             ),
                           ),
-                    // ...eliminada la Row de tipo de transacción (icono + texto)...
                     const SizedBox(height: 5),
-                    // Selector igual al de add_global_transaction_modal.dart
+                    // Selector de Tipo (Toggle)
                     Center(
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         decoration: BoxDecoration(
-                          // Fondo unificado desde budgeto_colors.dart
                           color: kSliderContainerBg,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
@@ -611,7 +609,7 @@ class _TransactionFormState extends State<TransactionForm> {
                               color: Colors.red,
                               onTap: () => setState(() => _type = 'debt'),
                             ),
-                            SizedBox(width: 45), // Igual separación visual
+                            SizedBox(width: 45),
                             _ToggleTypeButton(
                               selected: _type == 'payment',
                               icon: Icons.trending_up,
@@ -624,7 +622,7 @@ class _TransactionFormState extends State<TransactionForm> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    // Monto (fila propia) seguido de fila de moneda y botón agregar debajo
+                    // Monto
                     TextField(
                       controller: _amountController,
                       focusNode: _amountFocusNode,
@@ -659,6 +657,7 @@ class _TransactionFormState extends State<TransactionForm> {
                       ],
                     ),
                     const SizedBox(height: 7),
+                    // Moneda
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -713,7 +712,6 @@ class _TransactionFormState extends State<TransactionForm> {
                                         border: OutlineInputBorder(),
                                         isDense: true,
                                       ),
-                                      // No forzar mayúsculas al escribir, se normaliza al guardar
                                       textCapitalization:
                                           TextCapitalization.sentences,
                                       maxLength: 11,
@@ -731,7 +729,6 @@ class _TransactionFormState extends State<TransactionForm> {
                                             Navigator.of(ctx).pop();
                                             return;
                                           }
-                                          // Normaliza: solo primera letra mayúscula, resto minúscula
                                           code =
                                               code
                                                   .substring(0, 1)
@@ -757,13 +754,11 @@ class _TransactionFormState extends State<TransactionForm> {
                                 },
                               );
                               if (newCode != null && newCode.isNotEmpty) {
-                                // Normaliza: solo primera letra mayúscula, resto minúscula
                                 final normalizedCode =
                                     newCode.substring(0, 1).toUpperCase() +
                                     (newCode.length > 1
                                         ? newCode.substring(1).toLowerCase()
                                         : '');
-                                // Verifica existencia ignorando mayúsculas/minúsculas
                                 final exists = availableCurrencies.any(
                                   (c) =>
                                       c.toLowerCase() ==
@@ -781,7 +776,6 @@ class _TransactionFormState extends State<TransactionForm> {
                                     '[TX_FORM] Error al Agregar Moneda manual: $e',
                                   );
                                 }
-                                // Buscar la versión realmente insertada (el provider podría haber cambiado el casing)
                                 String selectedValue = normalizedCode;
                                 for (final c
                                     in currencyProvider.availableCurrencies) {
@@ -801,7 +795,7 @@ class _TransactionFormState extends State<TransactionForm> {
                         ),
                       ],
                     ),
-                    // NUEVO: Campo de tasa si falta
+                    // Campo Tasa Manual
                     if (_rateFieldVisible)
                       Padding(
                         padding: const EdgeInsets.only(top: 10.0, bottom: 4.0),
@@ -815,8 +809,8 @@ class _TransactionFormState extends State<TransactionForm> {
                             prefixIcon: Icon(Icons.attach_money_rounded),
                             errorText:
                                 _rateController.text.isNotEmpty && !rateValid
-                                ? 'Ingrese una tasa válida (> 0)'
-                                : null,
+                                    ? 'Ingrese una tasa válida (> 0)'
+                                    : null,
                           ),
                           keyboardType: TextInputType.numberWithOptions(
                             decimal: true,
@@ -825,6 +819,7 @@ class _TransactionFormState extends State<TransactionForm> {
                         ),
                       ),
                     const SizedBox(height: 12),
+                    // Selector Fecha
                     GestureDetector(
                       onTap: _pickDate,
                       child: AbsorbPointer(
@@ -845,7 +840,7 @@ class _TransactionFormState extends State<TransactionForm> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    // Campo descripción con contador interno abajo a la derecha
+                    // Descripción con contador
                     Stack(
                       children: [
                         TextField(
@@ -860,8 +855,7 @@ class _TransactionFormState extends State<TransactionForm> {
                             ),
                             prefixIcon: const Icon(Icons.description),
                             isDense: true,
-                            counterText: '', // ocultar counter por defecto
-                            // Espacio extra derecha/abajo para no tapar texto
+                            counterText: '',
                             contentPadding: const EdgeInsets.fromLTRB(
                               12,
                               12,
@@ -894,12 +888,13 @@ class _TransactionFormState extends State<TransactionForm> {
                                   fontWeight: FontWeight.w600,
                                   color:
                                       _descriptionController.text.length >=
-                                          _descriptionMaxLength
-                                      ? Colors.red
-                                      : (_descriptionController.text.length >=
-                                                _descriptionMaxLength - 5
-                                            ? Colors.orange
-                                            : Colors.grey.shade700),
+                                              _descriptionMaxLength
+                                          ? Colors.red
+                                          : (_descriptionController
+                                                          .text.length >=
+                                                      _descriptionMaxLength - 5
+                                                  ? Colors.orange
+                                                  : Colors.grey.shade700),
                                 ),
                               ),
                             ),
@@ -907,6 +902,7 @@ class _TransactionFormState extends State<TransactionForm> {
                         ),
                       ],
                     ),
+                    // Mensaje de Error
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0),
@@ -926,6 +922,7 @@ class _TransactionFormState extends State<TransactionForm> {
                         ),
                       ),
                     const SizedBox(height: 18),
+                    // Botón Principal (Guardar / Abrir Modal)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -958,14 +955,15 @@ class _TransactionFormState extends State<TransactionForm> {
                           _loading
                               ? 'Guardando...'
                               : (_type == 'debt'
-                                    ? 'Guardar Deuda'
-                                    : 'Guardar Abono'),
+                                  ? 'Guardar Deuda'
+                                  : 'Guardar Abono'),
                         ),
-                        // 🚨 CAMBIO: Ahora llama al modal
+                        // Llama a _showConfirmationModal, que ahora valida pero NO guarda hasta confirmar
                         onPressed: _loading ? null : _showConfirmationModal,
                       ),
                     ),
                     const SizedBox(height: 10),
+                    // Botón Cerrar
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
@@ -1002,7 +1000,6 @@ class _TransactionFormState extends State<TransactionForm> {
   }
 }
 
-// Botón para alternar tipo de transacción (deuda/abono)
 class _ToggleTypeButton extends StatelessWidget {
   final bool selected;
   final IconData icon;
@@ -1021,7 +1018,6 @@ class _ToggleTypeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseColor = color;
-    // Reemplazo de .withOpacity() deprecado por .withValues para precisión
     final selectedColor = baseColor.withValues(
       red: ((baseColor.red * 255.0).round() & 0xff).toDouble(),
       green: ((baseColor.green * 255.0).round() & 0xff).toDouble(),
