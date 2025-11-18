@@ -3,6 +3,10 @@
 Todas las novedades, mejoras y correcciones planeadas y lanzadas para Deuda Flow.
 
 
+## [1.0.26+27] - 2025-11-17
+- Se agregan secciones de filtrado en area de clientes
+- Correccion de errores minimos
+
 ## [1.0.18+19] - 2025-11-17
 - Confirmación de Transacciones: Implementado un modal de confirmación obligatorio en el formulario de Transacción Global antes de guardar, para revisar los detalles finales (monto, cliente, fecha) y evitar errores de registro.
 
