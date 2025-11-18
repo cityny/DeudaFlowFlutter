@@ -403,7 +403,7 @@ class _GlobalTransactionFormState extends State<_GlobalTransactionForm> {
     }
   }
 
-  // Nuevo método para mostrar el modal de confirmación
+  // Nuevo método para mostrar el modal de confirmación con estilos corregidos
   Future<bool?> _showConfirmationModal({
     required BuildContext context,
     required String type,
@@ -420,7 +420,7 @@ class _GlobalTransactionFormState extends State<_GlobalTransactionForm> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Confirmar Transacción Global'),
+          title: const Text('Confirmar Transacción'),
           content: SingleChildScrollView(
             child: ListBody(
               children: <Widget>[
@@ -431,11 +431,62 @@ class _GlobalTransactionFormState extends State<_GlobalTransactionForm> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                Text('Tipo: ${type == 'debt' ? 'Deuda' : 'Abono'}'),
-                Text('Cliente: $clientName'),
-                Text('Monto: $amountStr $currencyCode'),
-                Text('Fecha: $formattedDate'),
-                Text('Descripción: $description'),
+                // 🚨 CAMBIO AQUÍ: Uso de Text.rich para negrita solo en la etiqueta
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'Tipo: ',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(text: type == 'debt' ? 'Deuda' : 'Abono'),
+                    ],
+                  ),
+                ),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'Cliente: ',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(text: clientName),
+                    ],
+                  ),
+                ),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'Monto: ',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(text: '$amountStr $currencyCode'),
+                    ],
+                  ),
+                ),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'Fecha: ',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(text: formattedDate),
+                    ],
+                  ),
+                ),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'Descripción: ',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(text: description),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 10),
                 const Text(
                   '¿Desea guardar esta transacción?',
