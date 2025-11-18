@@ -148,3 +148,23 @@ Detalles:
 - counterText oculto.
 - Padding extra para no solapar texto.
 - Badge con color dinámico (gris / naranja / rojo).
+
+22. Error: La aplicación no era compatible con dispositivos Android más antiguos (API 21, 22, 23) porque Google Play Console reportaba un `minSdk` de 24, a pesar de intentar configurarlo a 21. El plugin de Gradle de Flutter sobrescribía la configuración manual de `minSdk = 21` a `minSdk = flutter.minSdkVersion`, que se resolvía a un valor superior (24) en versiones recientes de Flutter o dependencias.
+    - Problema: `minSdk = flutter.minSdkVersion` en `android/app/build.gradle.kts` se evaluaba a 24, reduciendo drásticamente la compatibilidad. Los intentos de cambiarlo a `minSdk = 21` o `minSdkVersion(21)` eran revertidos automáticamente durante la compilación por el plugin de Flutter.
+    - Solución: Para forzar el `minSdk` a 21 de manera definitiva y evitar que fuera sobrescrito por el plugin de Flutter, se añadió un bloque `project.afterEvaluate` en `android/app/build.gradle.kts`. Este bloque asegura que el `minSdk` se establezca a 21 después de que todos los plugins (incluido Flutter) hayan terminado de configurar el proyecto.
+      ```kotlin android/app/build.gradle.kts
+      // ... existing android { ... } block ...
+
+      project.afterEvaluate {
+          android {
+              defaultConfig {
+                  minSdkVersion(21) // Se fuerza el SDK mínimo a 21 aquí.
+              }
+          }
+      }
+      ```
+    - Archivos: `android/app/build.gradle.kts`
+    - Pasos adicionales cruciales: `flutter clean` y `flutter pub get` antes de `flutter build appbundle --release`.
+    - Resultado: La aplicación ahora compila con un `minSdk` de 21, resolviendo los problemas de compatibilidad en Google Play Console y permitiendo la instalación en un mayor número de dispositivos.
+
+Fecha: 2024-05-16

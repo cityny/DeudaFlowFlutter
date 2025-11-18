@@ -2,7 +2,7 @@ name: deuda_flow_flutter
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -16,11 +16,10 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.18+19
+version: 1.0.25+26
 
 environment:
   sdk: ^3.8.1
-
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -31,7 +30,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -80,8 +78,6 @@ dev_dependencies:
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
-
-
 
 flutter:
   uses-material-design: true
@@ -142,6 +138,6 @@ flutter_launcher_icons:
     generate: true
     image_path: assets/app_icon.png
   # Ícono adaptativo para Android (evita el ícono pequeño dentro de un cuadro blanco)
-  adaptive_icon_background: "#6C63FF"   # Puedes cambiar este color por el de tu marca
+  adaptive_icon_background: "#6C63FF" # Puedes cambiar este color por el de tu marca
   adaptive_icon_foreground: assets/app_icon.png
   adaptive_icon_foreground_inset: 10 # porcentaje de padding (default 16). Sube este valor para hacer el ícono un poco más pequeño

@@ -41,11 +41,25 @@ android {
     }
 
     defaultConfig {
-    applicationId = "com.deudaflow.app"
-        minSdk = flutter.minSdkVersion
+        applicationId = "com.deudaflow.app"
+        
+        // --- (INICIO DE LA CORRECCIÓN #2: MIN SDK) ---
+        // Forzamos el SDK mínimo a 21 con la sintaxis de función.
+        // Si el archivo se sigue reescribiendo a 'flutter.minSdkVersion', este valor
+        // será sobrescrito por el bloque 'afterEvaluate' al final.
+        minSdkVersion(21)
+        // --- (FIN DE LA CORRECCIÓN #2) ---
+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // --- (INICIO DE LA CORRECCIÓN #1: ARQUITECTURAS) ---
+        // Forzamos las 4 arquitecturas para recuperar la compatibilidad x86
+        ndk {
+            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86_64", "x86"))
+        }
+        // --- (FIN DE LA CORRECCIÓN #1) ---
     }
 
     buildTypes {
@@ -55,8 +69,20 @@ android {
     }
 }
 
+// Bloque afterEvaluate para asegurar que minSdk se establece después
+// de que todos los otros plugins (incluido Flutter) hayan configurado sus valores.
+// Esto es para *forzar* minSdk a 21 y evitar que sea sobrescrito,
+// incluso si la línea de defaultConfig es revertida por algún proceso automático.
+// --- (INICIO DE LA CORRECCIÓN #2: MIN SDK - Sobrescritura final) ---
+project.afterEvaluate {
+    android {
+        defaultConfig {
+            minSdkVersion(21) // Aseguramos el SDK mínimo a 21 aquí, como último recurso.
+        }
+    }
+}
+// --- (FIN DE LA CORRECCIÓN #2) ---
+
 flutter {
     source = "../.."
 }
-
-
