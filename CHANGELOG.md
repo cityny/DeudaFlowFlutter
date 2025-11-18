@@ -2,6 +2,12 @@
 
 Todas las novedades, mejoras y correcciones planeadas y lanzadas para Deuda Flow.
 
+
+## [1.0.9+9] - 2025-11-17
+- Confirmación de Transacciones: Implementado un modal de confirmación obligatorio en el formulario de Transacción Global antes de guardar, para revisar los detalles finales (monto, cliente, fecha) y evitar errores de registro.
+
+- Frecuencia de Anuncios: Se redujo la probabilidad de mostrar anuncios intersticiales (a pantalla completa) en los eventos de navegación de la aplicación para mejorar la experiencia del usuario.
+
 ## [1.0.8+8] - 2025-09-18
 
 ### Novedades (versión 1.0.8+8)
