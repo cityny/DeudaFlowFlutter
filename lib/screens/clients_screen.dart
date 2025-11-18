@@ -282,8 +282,6 @@ class ClientsScreenState extends State<ClientsScreen>
     });
   }
 
-  // dispose fusionado aquí
-  // dispose único y fusionado
   @override
   void dispose() {
     _searchController.dispose();
@@ -346,19 +344,11 @@ class ClientsScreenState extends State<ClientsScreen>
     });
 
     // --- OPTIMIZACIÓN: Flujo de Sincronización Mejorado ---
-    // Se eliminó el bucle de sondeo (polling) que recargaba los clientes
-    // repetidamente, lo cual era ineficiente. El nuevo flujo es más rápido y robusto.
-
-    // 1. Se envían todos los cambios locales al servidor (push).
-    // Se mantienen secuenciales para evitar condiciones de carrera.
     await provider.syncPendingClients(widget.userId);
     await provider.cleanLocalPendingDeletedClients();
     await txProvider.syncPendingTransactions(widget.userId);
     await txProvider.cleanLocalOrphanTransactions();
 
-    // 2. Se recarga toda la información desde el servidor (pull) una sola vez.
-    // Las cargas de clientes y transacciones se ejecutan en paralelo para
-    // acelerar el proceso, ya que son independientes entre sí.
     await Future.wait([
       provider.loadClients(widget.userId),
       txProvider.loadTransactions(widget.userId),
@@ -526,6 +516,258 @@ class ClientsScreenState extends State<ClientsScreen>
     });
   }
 
+  // 🚨 NUEVO: Widget auxiliar para las etiquetas de sección
+  Widget _buildCategoryHeader(String title, Color color) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            // --- INICIO: AJUSTE REALIZADO AQUÍ ---
+            // Se quita el withValues(alpha: 0.1) para hacerlo sólido
+            color: color.withOpacity(0.95), // Fondo casi sólido
+            borderRadius: BorderRadius.circular(20),
+            // Se quita el withValues(alpha: 0.3) para un borde sólido o casi sólido
+            border: Border.all(color: color.withOpacity(0.95), width: 1),
+            // --- FIN: AJUSTE REALIZADO AQUÍ ---
+          ),
+          child: Text(
+            title,
+            style: TextStyle(
+              color: Colors.white, // Se cambia el color del texto a blanco para mejor contraste
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🚨 NUEVO: Widget auxiliar para envolver el card con el estilo existente
+  Widget _buildClientCardWrapper(
+    BuildContext context,
+    ClientHive client,
+    TransactionProvider txProvider,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5), // Espaciado vertical entre cards
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color.fromARGB(0, 0, 0, 0),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color.fromARGB(
+                0,
+                0,
+                0,
+                0,
+              ).withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ExpandableClientCard(
+          client: client,
+          userId: widget.userId,
+          expanded: _expandedClientId == client.id,
+          onExpand: () {
+            setState(() {
+              _expandedClientId =
+                  _expandedClientId == client.id ? null : client.id;
+            });
+          },
+          onEdit: () => showClientForm(client),
+          onDelete: () async {
+            final provider = Provider.of<ClientProvider>(
+              context,
+              listen: false,
+            );
+            final userTx = txProvider.transactions
+                .where((tx) => tx.clientId == client.id)
+                .toList();
+
+            final String? choice = await showDialog<String>(
+              context: context,
+              builder: (ctx) {
+                final message = userTx.isEmpty
+                    ? '"${client.name}" no tiene transacciones.\n¿Eliminarlo?'
+                    : '"${client.name}" tiene ${userTx.length} transacción(es).\n¿Qué deseas eliminar?';
+
+                final indigoStyle = ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromARGB(244, 54, 133, 244),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                  minimumSize: const Size(double.infinity, 44),
+                );
+                final dangerStyle = ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                  minimumSize: const Size(double.infinity, 44),
+                );
+                final neutralStyle = ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEDEDF4),
+                  foregroundColor: const Color(0xFF1F1F39),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                  minimumSize: const Size(double.infinity, 44),
+                );
+
+                final String confirmLabel =
+                    userTx.isEmpty ? 'Sí' : 'Cliente y Transacciones';
+
+                return AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: Text(
+                    message,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (userTx.isNotEmpty) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            style: indigoStyle,
+                            onPressed: () => Navigator.of(ctx).pop('txOnly'),
+                            child: const Text('Transacciones'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: dangerStyle,
+                          onPressed: () =>
+                              Navigator.of(ctx).pop('clientAndTx'),
+                          child: Text(confirmLabel),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: neutralStyle,
+                          onPressed: () => Navigator.of(ctx).pop(null),
+                          child: const Text('Cancelar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+
+            if (choice == null) return;
+
+            try {
+              if (choice == 'txOnly') {
+                for (final t in userTx) {
+                  await txProvider.deleteTransaction(t.id, widget.userId);
+                }
+                await txProvider.loadTransactions(widget.userId);
+                await txProvider.syncPendingTransactions(widget.userId);
+                await provider.loadClients(widget.userId);
+                if (!mounted) return;
+                final isOnline = await txProvider.isOnline();
+                if (!mounted) return;
+                // ignore: use_build_context_synchronously
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isOnline
+                          ? 'Transacciones del cliente eliminadas.'
+                          : 'Transacciones pendientes por eliminar.',
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              } else if (choice == 'clientAndTx') {
+                await provider.deleteClient(client.id, widget.userId);
+                await provider.loadClients(widget.userId);
+                if (mounted) {
+                  setState(() {});
+                }
+                await provider.cleanLocalPendingDeletedClients();
+                await provider.syncPendingClients(widget.userId);
+                await txProvider.syncPendingTransactions(widget.userId);
+                await txProvider.cleanLocalOrphanTransactions();
+                await txProvider.loadTransactions(widget.userId);
+                if (!mounted) return;
+                final isOnline = await txProvider.isOnline();
+                if (!mounted) return;
+                // ignore: use_build_context_synchronously
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isOnline
+                          ? 'Cliente y transacciones eliminados.'
+                          : 'Cliente y transacciones pendientes por eliminar.',
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            } catch (e) {
+              if (!mounted) return;
+              // ignore: use_build_context_synchronously
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error al eliminar: $e')),
+              );
+            }
+          },
+          onAddTransaction: () => _showTransactionForm(client),
+          onViewMovements: (clientId) {
+            if (_showSearch || _searchText.isNotEmpty) {
+              setState(() {
+                _showSearch = false;
+                _searchText = '';
+                _searchController.clear();
+                _searchFocusNode.unfocus();
+              });
+            }
+            if (widget.onViewMovements != null) {
+              widget.onViewMovements!(clientId);
+            }
+          },
+          onReceipt: () {
+            final clientData = [
+              {
+                'client': client,
+                'transactions': txProvider.transactions
+                    .where((tx) => tx.clientId == client.id)
+                    .toList(),
+              },
+            ];
+            showDialog(
+              context: context,
+              builder: (_) => GeneralReceiptModal(clientData: clientData),
+            );
+          },
+          syncMessage: _clientSyncStates[client.id] ??
+              SyncMessageState.fromClient(client),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Fondo degradado global y notch transparente igual que TransactionsScreen
@@ -579,18 +821,27 @@ class ClientsScreenState extends State<ClientsScreen>
                   // Ordena alfabéticamente por la primera letra del nombre
                   List<ClientHive> clients =
                       _showSearch && _searchText.isNotEmpty
-                      ? allClients
-                            .where(
-                              (c) => c.name.toLowerCase().contains(
-                                _searchText.toLowerCase(),
-                              ),
-                            )
-                            .toList()
-                      : List<ClientHive>.from(allClients);
+                          ? allClients
+                              .where(
+                                (c) => c.name.toLowerCase().contains(
+                                      _searchText.toLowerCase(),
+                                    ),
+                              )
+                              .toList()
+                          : List<ClientHive>.from(allClients);
                   clients.sort(
                     (a, b) =>
                         a.name.toLowerCase().compareTo(b.name.toLowerCase()),
                   );
+
+                  // 🚨 CLASIFICACIÓN DE CLIENTES
+                  final deudores =
+                      clients.where((c) => c.balance < 0).toList();
+                  final saldoFavor =
+                      clients.where((c) => c.balance > 0).toList();
+                  final sinMovimientos =
+                      clients.where((c) => c.balance == 0).toList();
+
                   // --- LAYOUT INDEPENDIENTE Y MODERNO ---
                   return Column(
                     children: [
@@ -661,9 +912,8 @@ class ClientsScreenState extends State<ClientsScreen>
                                             final clientData = allClients
                                                 .map(
                                                   (c) => {
-                                                    'client': Client.fromHive(
-                                                      c,
-                                                    ),
+                                                    'client':
+                                                        Client.fromHive(c),
                                                     'transactions': txProvider
                                                         .transactions
                                                         .where(
@@ -690,9 +940,9 @@ class ClientsScreenState extends State<ClientsScreen>
                                         FutureBuilder<bool>(
                                           future:
                                               Provider.of<TransactionProvider>(
-                                                context,
-                                                listen: false,
-                                              ).isOnline(),
+                                            context,
+                                            listen: false,
+                                          ).isOnline(),
                                           builder: (context, snapshot) {
                                             final online =
                                                 snapshot.data ?? true;
@@ -717,16 +967,16 @@ class ClientsScreenState extends State<ClientsScreen>
                                                   return Transform.rotate(
                                                     angle: _isSyncing
                                                         ? -_syncController
-                                                                  .value *
-                                                              6.28319
+                                                                .value *
+                                                            6.28319
                                                         : 0,
                                                     child: Icon(
                                                       Icons.sync,
                                                       color: _isSyncing
                                                           ? Colors.green
                                                           : Theme.of(context)
-                                                                .colorScheme
-                                                                .primary,
+                                                              .colorScheme
+                                                              .primary,
                                                     ),
                                                   );
                                                 },
@@ -757,18 +1007,19 @@ class ClientsScreenState extends State<ClientsScreen>
                                           onPressed: () async {
                                             final provider =
                                                 Provider.of<ClientProvider>(
-                                                  context,
-                                                  listen: false,
-                                                );
-                                            final txProvider =
-                                                Provider.of<
-                                                  TransactionProvider
-                                                >(context, listen: false);
+                                              context,
+                                              listen: false,
+                                            );
+                                            final txProvider = Provider.of<
+                                                TransactionProvider>(
+                                              context,
+                                              listen: false,
+                                            );
                                             final box = Hive.box<ClientHive>(
                                               'clients',
                                             );
-                                            final allClients = box.values
-                                                .toList();
+                                            final allClients =
+                                                box.values.toList();
                                             if (allClients.isEmpty) {
                                               ScaffoldMessenger.of(
                                                 context,
@@ -784,60 +1035,51 @@ class ClientsScreenState extends State<ClientsScreen>
                                             // Estilos de botones (mismo ancho)
                                             final indigoStyle =
                                                 ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(
-                                                    0xFF4F46E5,
-                                                  ),
-                                                  foregroundColor: Colors.white,
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          12,
-                                                        ),
-                                                  ),
-                                                  elevation: 0,
-                                                  minimumSize: const Size(
-                                                    double.infinity,
-                                                    44,
-                                                  ),
-                                                );
+                                              backgroundColor:
+                                                  const Color(0xFF4F46E5),
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              elevation: 0,
+                                              minimumSize: const Size(
+                                                double.infinity,
+                                                44,
+                                              ),
+                                            );
                                             final dangerStyle =
                                                 ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.red,
-                                                  foregroundColor: Colors.white,
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          12,
-                                                        ),
-                                                  ),
-                                                  elevation: 0,
-                                                  minimumSize: const Size(
-                                                    double.infinity,
-                                                    44,
-                                                  ),
-                                                );
+                                              backgroundColor: Colors.red,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              elevation: 0,
+                                              minimumSize: const Size(
+                                                double.infinity,
+                                                44,
+                                              ),
+                                            );
                                             final neutralStyle =
                                                 ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(
-                                                    0xFFEDEDF4,
-                                                  ),
-                                                  foregroundColor: const Color(
-                                                    0xFF1F1F39,
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          12,
-                                                        ),
-                                                  ),
-                                                  elevation: 0,
-                                                  minimumSize: const Size(
-                                                    double.infinity,
-                                                    44,
-                                                  ),
-                                                );
-                                            final String?
-                                            choice = await showDialog<String>(
+                                              backgroundColor:
+                                                  const Color(0xFFEDEDF4),
+                                              foregroundColor:
+                                                  const Color(0xFF1F1F39),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              elevation: 0,
+                                              minimumSize: const Size(
+                                                double.infinity,
+                                                44,
+                                              ),
+                                            );
+                                            final String? choice =
+                                                await showDialog<String>(
                                               context: context,
                                               builder: (ctx) => AlertDialog(
                                                 shape: RoundedRectangleBorder(
@@ -859,9 +1101,10 @@ class ClientsScreenState extends State<ClientsScreen>
                                                       child: ElevatedButton(
                                                         style: indigoStyle,
                                                         onPressed: () =>
-                                                            Navigator.of(
-                                                              ctx,
-                                                            ).pop('txOnlyAll'),
+                                                            Navigator.of(ctx)
+                                                                .pop(
+                                                          'txOnlyAll',
+                                                        ),
                                                         child: const Text(
                                                           'Todas las transacciones',
                                                         ),
@@ -873,11 +1116,10 @@ class ClientsScreenState extends State<ClientsScreen>
                                                       child: ElevatedButton(
                                                         style: dangerStyle,
                                                         onPressed: () =>
-                                                            Navigator.of(
-                                                              ctx,
-                                                            ).pop(
-                                                              'clientsAndTxAll',
-                                                            ),
+                                                            Navigator.of(ctx)
+                                                                .pop(
+                                                          'clientsAndTxAll',
+                                                        ),
                                                         child: const Text(
                                                           'Todos los clientes',
                                                         ),
@@ -889,9 +1131,8 @@ class ClientsScreenState extends State<ClientsScreen>
                                                       child: ElevatedButton(
                                                         style: neutralStyle,
                                                         onPressed: () =>
-                                                            Navigator.of(
-                                                              ctx,
-                                                            ).pop(null),
+                                                            Navigator.of(ctx)
+                                                                .pop(null),
                                                         child: const Text(
                                                           'Cancelar',
                                                         ),
@@ -907,48 +1148,53 @@ class ClientsScreenState extends State<ClientsScreen>
                                             bool confirmed = true;
                                             if (choice == 'txOnlyAll' ||
                                                 choice == 'clientsAndTxAll') {
-                                              String warningMsg =
-                                                  choice == 'txOnlyAll'
+                                              String warningMsg = choice ==
+                                                      'txOnlyAll'
                                                   ? '¿Estás seguro de que deseas eliminar TODAS las transacciones? Esta acción no se puede deshacer.'
                                                   : '¿Estás seguro de que deseas eliminar TODOS los clientes y sus transacciones? Esta acción no se puede deshacer.';
                                               confirmed =
                                                   await showDialog<bool>(
-                                                    context: context,
-                                                    builder: (ctx) => AlertDialog(
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
+                                                        context: context,
+                                                        builder: (ctx) =>
+                                                            AlertDialog(
+                                                          shape:
+                                                              RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
                                                               16,
                                                             ),
-                                                      ),
-                                                      title: const Text(
-                                                        'Confirmar eliminación',
-                                                      ),
-                                                      content: Text(warningMsg),
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed: () =>
-                                                              Navigator.of(
+                                                          ),
+                                                          title: const Text(
+                                                            'Confirmar eliminación',
+                                                          ),
+                                                          content:
+                                                              Text(warningMsg),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
                                                                 ctx,
                                                               ).pop(false),
-                                                          child: const Text(
-                                                            'Cancelar',
-                                                          ),
-                                                        ),
-                                                        ElevatedButton(
-                                                          style: dangerStyle,
-                                                          onPressed: () =>
-                                                              Navigator.of(
+                                                              child: const Text(
+                                                                'Cancelar',
+                                                              ),
+                                                            ),
+                                                            ElevatedButton(
+                                                              style:
+                                                                  dangerStyle,
+                                                              onPressed: () =>
+                                                                  Navigator.of(
                                                                 ctx,
                                                               ).pop(true),
-                                                          child: const Text(
-                                                            'Eliminar',
-                                                          ),
+                                                              child: const Text(
+                                                                'Eliminar',
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
-                                                      ],
-                                                    ),
-                                                  ) ??
-                                                  false;
+                                                      ) ??
+                                                      false;
                                               if (!confirmed) return;
                                             }
 
@@ -974,18 +1220,18 @@ class ClientsScreenState extends State<ClientsScreen>
                                                 for (final t in allTx) {
                                                   await txProvider
                                                       .deleteTransaction(
-                                                        t.id,
-                                                        widget.userId,
-                                                      );
+                                                    t.id,
+                                                    widget.userId,
+                                                  );
                                                 }
                                                 await txProvider
                                                     .loadTransactions(
-                                                      widget.userId,
-                                                    );
+                                                  widget.userId,
+                                                );
                                                 await txProvider
                                                     .syncPendingTransactions(
-                                                      widget.userId,
-                                                    );
+                                                  widget.userId,
+                                                );
                                                 await provider.loadClients(
                                                   widget.userId,
                                                 );
@@ -1074,12 +1320,11 @@ class ClientsScreenState extends State<ClientsScreen>
                                           boxShadow: _searchText.isNotEmpty
                                               ? [
                                                   BoxShadow(
-                                                    color:
-                                                        const Color(
-                                                          0xFF7C3AED,
-                                                        ).withAlpha(
-                                                          (0.18 * 255).toInt(),
-                                                        ),
+                                                    color: const Color(
+                                                      0xFF7C3AED,
+                                                    ).withAlpha(
+                                                      (0.18 * 255).toInt(),
+                                                    ),
                                                     blurRadius: 10,
                                                     spreadRadius: 1,
                                                   ),
@@ -1109,9 +1354,9 @@ class ClientsScreenState extends State<ClientsScreen>
                                                 InputBorder.none,
                                             contentPadding:
                                                 EdgeInsets.symmetric(
-                                                  horizontal: 14,
-                                                  vertical: 14,
-                                                ),
+                                              horizontal: 14,
+                                              vertical: 14,
+                                            ),
                                             fillColor: Color(0xFFF3F6FD),
                                             filled: true,
                                             hoverColor: Colors.transparent,
@@ -1192,416 +1437,41 @@ class ClientsScreenState extends State<ClientsScreen>
                                       },
                                       child: ScrollConfiguration(
                                         behavior: NoScrollbarBehavior(),
-                                        child: ListView.separated(
-                                          padding: EdgeInsets.fromLTRB(
+                                        child: ListView(
+                                          padding: const EdgeInsets.fromLTRB(
                                             0,
                                             10,
                                             0,
                                             kBottomNavigationBarHeight + 40,
                                           ),
-                                          itemCount: clients.length,
-                                          separatorBuilder: (_, __) =>
-                                              const SizedBox(height: 10),
-                                          itemBuilder: (context, index) {
-                                            final client = clients[index];
-                                            return Container(
-                                              decoration: BoxDecoration(
-                                                color: const Color.fromARGB(
-                                                  0,
-                                                  0,
-                                                  0,
-                                                  0,
-                                                ),
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color:
-                                                        const Color.fromARGB(
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                        ).withAlpha(
-                                                          (0.03 * 255).toInt(),
-                                                        ),
-                                                    blurRadius: 8,
-                                                    offset: const Offset(0, 2),
-                                                  ),
-                                                ],
+                                          children: [
+                                            if (deudores.isNotEmpty) ...[
+                                              _buildCategoryHeader(
+                                                  'Deudores', Colors.red),
+                                              ...deudores.map(
+                                                (c) => _buildClientCardWrapper(
+                                                    context, c, txProvider),
                                               ),
-                                              child: ExpandableClientCard(
-                                                client: client,
-                                                userId: widget.userId,
-                                                expanded:
-                                                    _expandedClientId ==
-                                                    client.id,
-                                                onExpand: () {
-                                                  setState(() {
-                                                    _expandedClientId =
-                                                        _expandedClientId ==
-                                                            client.id
-                                                        ? null
-                                                        : client.id;
-                                                  });
-                                                },
-                                                onEdit: () =>
-                                                    showClientForm(client),
-                                                onDelete: () async {
-                                                  final provider =
-                                                      Provider.of<
-                                                        ClientProvider
-                                                      >(context, listen: false);
-                                                  final txProvider =
-                                                      Provider.of<
-                                                        TransactionProvider
-                                                      >(context, listen: false);
-
-                                                  final userTx = txProvider
-                                                      .transactions
-                                                      .where(
-                                                        (tx) =>
-                                                            tx.clientId ==
-                                                            client.id,
-                                                      )
-                                                      .toList();
-
-                                                  final String?
-                                                  choice = await showDialog<String>(
-                                                    context: context,
-                                                    builder: (ctx) {
-                                                      final message =
-                                                          userTx.isEmpty
-                                                          ? '"${client.name}" no tiene transacciones.\n¿Eliminarlo?'
-                                                          : '"${client.name}" tiene ${userTx.length} transacción(es).\n¿Qué deseas eliminar?';
-
-                                                      final indigoStyle =
-                                                          ElevatedButton.styleFrom(
-                                                            backgroundColor:
-                                                                const Color.fromARGB(
-                                                                  244,
-                                                                  54,
-                                                                  133,
-                                                                  244,
-                                                                ),
-                                                            foregroundColor:
-                                                                Colors.white,
-                                                            shape: RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    12,
-                                                                  ),
-                                                            ),
-                                                            elevation: 0,
-                                                            minimumSize:
-                                                                const Size(
-                                                                  double
-                                                                      .infinity,
-                                                                  44,
-                                                                ),
-                                                          );
-                                                      final dangerStyle =
-                                                          ElevatedButton.styleFrom(
-                                                            backgroundColor:
-                                                                Colors.red,
-                                                            foregroundColor:
-                                                                Colors.white,
-                                                            shape: RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    12,
-                                                                  ),
-                                                            ),
-                                                            elevation: 0,
-                                                            minimumSize:
-                                                                const Size(
-                                                                  double
-                                                                      .infinity,
-                                                                  44,
-                                                                ),
-                                                          );
-                                                      final neutralStyle =
-                                                          ElevatedButton.styleFrom(
-                                                            backgroundColor:
-                                                                const Color(
-                                                                  0xFFEDEDF4,
-                                                                ),
-                                                            foregroundColor:
-                                                                const Color(
-                                                                  0xFF1F1F39,
-                                                                ),
-                                                            shape: RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    12,
-                                                                  ),
-                                                            ),
-                                                            elevation: 0,
-                                                            minimumSize:
-                                                                const Size(
-                                                                  double
-                                                                      .infinity,
-                                                                  44,
-                                                                ),
-                                                          );
-
-                                                      // Etiqueta dinámica del botón principal
-                                                      final String
-                                                      confirmLabel =
-                                                          userTx.isEmpty
-                                                          ? 'Sí'
-                                                          : 'Cliente y Transacciones';
-
-                                                      return AlertDialog(
-                                                        shape: RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                16,
-                                                              ),
-                                                        ),
-                                                        title: Text(
-                                                          message,
-                                                          style:
-                                                              const TextStyle(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                              ),
-                                                        ),
-                                                        content: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            if (userTx
-                                                                .isNotEmpty) ...[
-                                                              SizedBox(
-                                                                width: double
-                                                                    .infinity,
-                                                                child: ElevatedButton(
-                                                                  style:
-                                                                      indigoStyle,
-                                                                  onPressed: () =>
-                                                                      Navigator.of(
-                                                                        ctx,
-                                                                      ).pop(
-                                                                        'txOnly',
-                                                                      ),
-                                                                  child: const Text(
-                                                                    'Transacciones',
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                              const SizedBox(
-                                                                height: 8,
-                                                              ),
-                                                            ],
-                                                            SizedBox(
-                                                              width: double
-                                                                  .infinity,
-                                                              child: ElevatedButton(
-                                                                style:
-                                                                    dangerStyle,
-                                                                onPressed: () =>
-                                                                    Navigator.of(
-                                                                      ctx,
-                                                                    ).pop(
-                                                                      'clientAndTx',
-                                                                    ),
-                                                                child: Text(
-                                                                  confirmLabel,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                              height: 8,
-                                                            ),
-                                                            SizedBox(
-                                                              width: double
-                                                                  .infinity,
-                                                              child: ElevatedButton(
-                                                                style:
-                                                                    neutralStyle,
-                                                                onPressed: () =>
-                                                                    Navigator.of(
-                                                                      ctx,
-                                                                    ).pop(null),
-                                                                child:
-                                                                    const Text(
-                                                                      'Cancelar',
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      );
-                                                    },
-                                                  );
-
-                                                  if (choice == null) return;
-
-                                                  try {
-                                                    if (choice == 'txOnly') {
-                                                      for (final t in userTx) {
-                                                        await txProvider
-                                                            .deleteTransaction(
-                                                              t.id,
-                                                              widget.userId,
-                                                            );
-                                                      }
-                                                      await txProvider
-                                                          .loadTransactions(
-                                                            widget.userId,
-                                                          );
-                                                      await txProvider
-                                                          .syncPendingTransactions(
-                                                            widget.userId,
-                                                          );
-                                                      await provider
-                                                          .loadClients(
-                                                            widget.userId,
-                                                          );
-                                                      if (!mounted) return;
-                                                      final isOnline =
-                                                          await txProvider
-                                                              .isOnline();
-                                                      if (!mounted) return;
-                                                      // ignore: use_build_context_synchronously
-                                                      ScaffoldMessenger.of(
-                                                        // ignore: use_build_context_synchronously
-                                                        context,
-                                                      ).showSnackBar(
-                                                        SnackBar(
-                                                          content: Text(
-                                                            isOnline
-                                                                ? 'Transacciones del cliente eliminadas.'
-                                                                : 'Transacciones pendientes por eliminar.',
-                                                          ),
-                                                          duration:
-                                                              const Duration(
-                                                                seconds: 2,
-                                                              ),
-                                                        ),
-                                                      );
-                                                    } else if (choice ==
-                                                        'clientAndTx') {
-                                                      await provider
-                                                          .deleteClient(
-                                                            client.id,
-                                                            widget.userId,
-                                                          );
-                                                      await provider
-                                                          .loadClients(
-                                                            widget.userId,
-                                                          );
-                                                      if (mounted) {
-                                                        setState(() {});
-                                                      }
-                                                      await provider
-                                                          .cleanLocalPendingDeletedClients();
-                                                      await provider
-                                                          .syncPendingClients(
-                                                            widget.userId,
-                                                          );
-                                                      await txProvider
-                                                          .syncPendingTransactions(
-                                                            widget.userId,
-                                                          );
-                                                      await txProvider
-                                                          .cleanLocalOrphanTransactions();
-                                                      await txProvider
-                                                          .loadTransactions(
-                                                            widget.userId,
-                                                          );
-                                                      if (!mounted) return;
-                                                      final isOnline =
-                                                          await txProvider
-                                                              .isOnline();
-                                                      if (!mounted) return;
-                                                      ScaffoldMessenger.of(
-                                                        // ignore: use_build_context_synchronously
-                                                        context,
-                                                      ).showSnackBar(
-                                                        SnackBar(
-                                                          content: Text(
-                                                            isOnline
-                                                                ? 'Cliente y transacciones eliminados.'
-                                                                : 'Cliente y transacciones pendientes por eliminar.',
-                                                          ),
-                                                          duration:
-                                                              const Duration(
-                                                                seconds: 2,
-                                                              ),
-                                                        ),
-                                                      );
-                                                    }
-                                                  } catch (e) {
-                                                    if (!mounted) return;
-                                                    ScaffoldMessenger.of(
-                                                      // ignore: use_build_context_synchronously
-                                                      context,
-                                                    ).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          'Error al eliminar: $e',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                                onAddTransaction: () =>
-                                                    _showTransactionForm(
-                                                      client,
-                                                    ),
-                                                onViewMovements: (clientId) {
-                                                  if (_showSearch ||
-                                                      _searchText.isNotEmpty) {
-                                                    setState(() {
-                                                      _showSearch = false;
-                                                      _searchText = '';
-                                                      _searchController.clear();
-                                                      _searchFocusNode
-                                                          .unfocus();
-                                                    });
-                                                  }
-                                                  if (widget.onViewMovements !=
-                                                      null) {
-                                                    widget.onViewMovements!(
-                                                      clientId,
-                                                    );
-                                                  }
-                                                },
-                                                onReceipt: () {
-                                                  final clientData = [
-                                                    {
-                                                      'client': client,
-                                                      'transactions': txProvider
-                                                          .transactions
-                                                          .where(
-                                                            (tx) =>
-                                                                tx.clientId ==
-                                                                client.id,
-                                                          )
-                                                          .toList(),
-                                                    },
-                                                  ];
-                                                  showDialog(
-                                                    context: context,
-                                                    builder: (_) =>
-                                                        GeneralReceiptModal(
-                                                          clientData:
-                                                              clientData,
-                                                        ),
-                                                  );
-                                                },
-                                                syncMessage:
-                                                    _clientSyncStates[client
-                                                        .id] ??
-                                                    SyncMessageState.fromClient(
-                                                      client,
-                                                    ),
+                                            ],
+                                            if (saldoFavor.isNotEmpty) ...[
+                                              _buildCategoryHeader(
+                                                  'Saldo a favor',
+                                                  Colors.green),
+                                              ...saldoFavor.map(
+                                                (c) => _buildClientCardWrapper(
+                                                    context, c, txProvider),
                                               ),
-                                            );
-                                          },
+                                            ],
+                                            if (sinMovimientos.isNotEmpty) ...[
+                                              _buildCategoryHeader(
+                                                  'Sin movimientos',
+                                                  Colors.grey),
+                                              ...sinMovimientos.map(
+                                                (c) => _buildClientCardWrapper(
+                                                    context, c, txProvider),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -1620,6 +1490,3 @@ class ClientsScreenState extends State<ClientsScreen>
     );
   }
 }
-
-// --- FIN: Layout desacoplado e independiente para pantalla de clientes --
-// --- FIN: Layout desacoplado e independiente para pantalla de clientes ---
