@@ -10,6 +10,9 @@ Guardar cambio a mi movil directamente
 flutter build apk --release
 flutter install
 
+Generar app para subir a Play Store
+flutter build appbundle --release
+
 ¿Cómo se compone la versión?
 Se suele usar el formato SemVer (Versionado Semántico):
 mayor.menor.parche
