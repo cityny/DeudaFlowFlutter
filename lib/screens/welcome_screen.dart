@@ -82,6 +82,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       return;
     }
     final status = await Permission.contacts.status;
+    // Si no hay permiso aún, mostrar la divulgación prominente antes de pedirlo.
+    if (!status.isGranted) {
+      final accepted = await _showContactDisclosure();
+      if (accepted != true) {
+        debugPrint('[CONTACTS] Usuario rechazó la divulgación de contactos.');
+        return;
+      }
+    }
+
     if (status.isGranted || (await Permission.contacts.request()).isGranted) {
       final contacts = await FlutterContacts.getContacts(withProperties: true);
       globalContacts = contacts;
@@ -104,6 +113,32 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     } else {
       debugPrint('[CONTACTS] Permiso de contactos no concedido al iniciar');
     }
+  }
+
+  Future<bool?> _showContactDisclosure() {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Permiso de contactos'),
+          content: const Text(
+            'La aplicación necesita acceder a tus contactos para facilitar la selección de clientes y autocompletar números. '
+            'Los contactos se almacenarán localmente en tu dispositivo y no se compartirán con terceros. ¿Deseas continuar?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
